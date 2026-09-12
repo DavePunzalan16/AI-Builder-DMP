@@ -77,7 +77,7 @@ const AuthPage = ({ mode }) => {
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     required
-                    className="w-full pl-10 pr-3.5 py-2.5 border border-zinc-200 rounded-xl bg-white shadow-xs focus:outline-none focus:ring-2 focus:ring-zinc-900/10 focus:border-zinc-400 text-sm text-zinc-900 placeholder-zinc-400 transition-all"
+                    className="w-full pl-10 pr-3.5 py-2.5 border border-zinc-200 rounded-xl bg-white shadow-xs focus:outline-none focus:ring-2 focus:ring-zinc-900/10 focus:border-zinc-400 text-sm text-zinc-900 placeholder-zinc-500 transition-all"
                     placeholder="Mark Doe"
                   />
                 </div>
@@ -95,7 +95,7 @@ const AuthPage = ({ mode }) => {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
-                  className="w-full pl-10 pr-3.5 py-2.5 border border-zinc-200 rounded-xl bg-white shadow-xs focus:outline-none focus:ring-2 focus:ring-zinc-900/10 focus:border-zinc-400 text-sm text-zinc-900 placeholder-zinc-400 transition-all"
+                  className="w-full pl-10 pr-3.5 py-2.5 border border-zinc-200 rounded-xl bg-white shadow-xs focus:outline-none focus:ring-2 focus:ring-zinc-900/10 focus:border-zinc-400 text-sm text-zinc-900 placeholder-zinc-500 transition-all"
                   placeholder="mark.doe@example.com"
                 />
               </div>
@@ -119,7 +119,7 @@ const AuthPage = ({ mode }) => {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
-                  className="w-full pl-10 pr-10 py-2.5 border border-zinc-200 rounded-xl bg-white shadow-xs focus:outline-none focus:ring-2 focus:ring-zinc-900/10 focus:border-zinc-400 text-sm text-zinc-900 placeholder-zinc-400 transition-all"
+                  className="w-full pl-10 pr-10 py-2.5 border border-zinc-200 rounded-xl bg-white shadow-xs focus:outline-none focus:ring-2 focus:ring-zinc-900/10 focus:border-zinc-400 text-sm text-zinc-900 placeholder-zinc-500 transition-all"
                   placeholder="••••••••"
                 />
                 <button
