@@ -5,9 +5,12 @@ import AuthPage from './pages/AuthPage.jsx'
 import HomePage from './pages/HomePage.jsx'
 import BuilderPage from './pages/BuilderPage.jsx'
 import PreviewPage from './pages/PreviewPage.jsx'
+import { Toaster } from 'react-hot-toast'
 
 const App = () => {
   return (
+    <>
+    <Toaster />
     <Routes>
       {/* Login Routes */}
       <Route element={<GuestLayout />}>
@@ -25,6 +28,7 @@ const App = () => {
       {/* Catch-All */}
       <Route path='*' element={<Navigate to="/" replace />} />
     </Routes>
+    </>
   )
 }
 

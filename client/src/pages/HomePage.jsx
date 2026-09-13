@@ -1,9 +1,140 @@
-import React from 'react'
+import React, { useEffect } from 'react'
+import { useAppContext } from '../context/AppContext'
+import PromptInput from '../components/PromptInput'
+import { homeTags } from '../assets/assets.js'
+import { useNavigate } from 'react-router-dom'
+import { ArrowRightIcon, ClockIcon, Trash2Icon } from 'lucide-react'
+import moment from "moment";
 
-const Homepage = () => {
+const HomePage = () => {
+
+  const navigate = useNavigate()
+
+  const {
+    user,
+    projects,
+    loadingProjects,
+    generatingProject,
+    loadProjects,
+    handleGenerate,
+    handleDelete,
+    logout
+  } = useAppContext()
+
+  useEffect(() => {
+    loadProjects()
+  }, [loadProjects])
+
   return (
-    <div>Homepage ni Bahh Nahh Wish</div>
+    <div className="h-screen overflow-y-scroll text-white font-sans bg-[url('/bgcolor/green-bg.png')] bg-cover bg-center bg-no-repeat flex flex-col">
+      {/* Navigation */}
+      <nav className="sticky top-0 z-10 flex items-center justify-between px-6 py-4 max-w-7xl mx-auto w-full">
+        <div className='flex items-center gap-2'>
+          <img src="/logo.svg" alt="Logo" className="w-10 h-10" />
+          <span className="text-xl font-bold">AIBuilder</span>
+        </div>
+        <div className="flex items-center gap-4 text-lg font-medium text-zinc-300">
+          <span>{user?.name}</span>
+          <button onClick={logout} className="py-2 px-4 border border-white/20 text-white hover:bg-white/10 text-lg rounded-md cursor-pointer bg-transparent transition-colors">
+            Logout
+          </button>
+        </div>
+      </nav>
+
+      {/* Hero Section */}
+      <div className="flex-1 flex flex-col items-center justify-center px-6 pb-20">
+        <div className="w-full max-w-4xl flex flex-col items-center">
+          {/* Promo Badge */}
+          <div className="flex items-center gap-2.5 p-2 pr-3 bg-white/10 backdrop-blur-2xl rounded-full border border-white/20 text-[16px] text-white/90 hover:bg-white/15 transition-colors cursor-default">
+            <span className="px-3 py-1 text-[12px] font-bold bg-red-700 rounded-full tracking-wider">
+              PROMO
+            </span>
+            <span>Create your First Project for Free!</span>
+          </div>
+
+          {/* Title */}
+          <h1 className="mt-6 text-4xl font-bold text-center text-white sm:text-5xl md:text-6xl max-w-2xl">
+            Build an AI-Powered Applications with Ease
+          </h1>
+          <p className='text-center text-sm md:text-base max-w-xl mt-4 text-white/65 leading-relaxed'>
+            Describe your idea, and our AI will generate the code for you. No coding skills required! Just provide a prompt for your project and watch as AI instantly generates your website's design and structure, then launches it for you.
+          </p>
+
+          {/* Prompt Input with Glassmorphic Variant */}
+          <div className='w-full mt-6'>
+            <PromptInput
+              onSubmit={handleGenerate}
+              loading={generatingProject}
+              placeholder='Create a portfolio Website...'
+              variant='glass'
+              autoFocus
+            />
+          </div>
+
+          {/* Scrolling Marquee tags */}
+          <div className='masked-marquee w-full mt-4 max-w-2xl overflow-hidden py-1'>
+            <div className='animate-marquee gap-3'>
+              {homeTags.map((tag, i) => (
+                <button
+                  key={i}
+                  onClick={() => handleGenerate(tag)}
+                  disabled={generatingProject}
+                  className='px-4 py-2 border rounded-full text-sm text-white bg-white/10 border-white/25 hover:bg-white/20 transition cursor-pointer shrink-0 font-medium'
+                >
+                  {tag}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* All Projects */}
+          {!loadingProjects && projects.length > 0 && (
+            <div className='mt-12 w-full'>
+
+              <div className='flex items-center justify-between pb-3 mb-3 border-b border-white/10'>
+                <p className='text-xs font-medium uppercase text-zinc-100 tracking-widest'>All Projects</p>
+                <span className='text-xs text-zinc-100 font-normal'>
+                  {projects.length} {projects.length === 1 ? "project" : "projects"}
+                </span>
+              </div>
+
+              <div className='space-y-2 max-h-[80vh] overflow-y-auto pr-1'>
+                {projects.map((p) => (
+                  <div
+                    key={p._id}
+                    className='bg-white/5 border border-white/10 rounded-lg px-4 py-3 flex items-center justify-between group hover:border-white/20 hover:bg-white/10 cursor-pointer backdrop-blur-md transition-all'
+                    onClick={() => navigate(`/builder/${p._id}`)}
+                  >
+                    <div className='flex-1 min-w-0'>
+                      <p className='text-sm font-medium text-white truncate'>{p.name}</p>
+                      <div className='flex items-center gap-2 mt-1'>
+                        <span className='flex items-center gap-1 text-xs text-white/60'>
+                          <ClockIcon size={10} />
+                          {moment(p.updatedAt || p.createdAt).fromNow()}
+                        </span>
+                        <span className='text-xs text-white/60 font-medium'>v{p.version}</span>
+                      </div>
+                    </div>
+                    <div className='flex items-center gap-2'>
+                      <button 
+                      onClick={(e)=>{
+                        e.stopPropagation();
+                        handleDelete(p._id)
+                      }}
+                      className='p-2 rounded-md text-zinc-200 hover:text-red-400 hover:bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity'>
+                        <Trash2Icon size={14}/>
+                      </button>
+                      <ArrowRightIcon size={14} className='text-zinc-200 group-hover:text-white'/>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
   )
 }
 
-export default Homepage
+export default HomePage

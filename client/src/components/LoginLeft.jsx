@@ -8,9 +8,9 @@ const LoginLeft = () => {
   ]
 
   return (
-    <div className="hidden lg:flex lg:w-2/5 relative bg-[url('/bg-img.png')] bg-cover bg-center bg-no-repeat flex-col justify-between p-12 shrink-0 select-none overflow-hidden">
+    <div className="hidden lg:flex lg:w-2/5 relative bg-[url('/bgcolor/green-bg.png')] bg-cover bg-center bg-no-repeat flex-col justify-between p-12 shrink-0 select-none overflow-hidden">
 
-      <div className="absolute inset-0 bg-gradient-to-b from-black/15 via-black/5 to-black/45 pointer-events-none" />
+      <div className="absolute inset-0 bg-linear-to-b from-black/15 via-black/5 to-black/45 pointer-events-none" />
 
       <div className="relative flex items-center gap-3.5">
         <img src="/logo.svg" alt="Logo" className="size-11" />

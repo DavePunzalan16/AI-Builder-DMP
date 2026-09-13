@@ -43,8 +43,24 @@ const AuthPage = ({ mode }) => {
       <LoginLeft />
 
       {/* Right Side */}
-      <div className="flex-1 flex items-center justify-center p-6">
-        <div className="w-full max-w-sm">
+      <div className="flex-1 relative flex items-center justify-center p-6 overflow-hidden">
+
+        {/* Subtle drifting grid background */}
+        <div
+          className="absolute inset-0 animate-grid pointer-events-none"
+          style={{
+            backgroundImage: `
+              linear-gradient(to right, #d4d4d8 0.5px, transparent 1px),
+              linear-gradient(to bottom, #d4d4d8 0.5px, transparent 1px)
+            `,
+            backgroundSize: '45px 45px',
+            opacity: 1.5,
+            maskImage: 'radial-gradient(ellipse at center, black 30%, transparent 75%)',
+            WebkitMaskImage: 'radial-gradient(ellipse at center, black 30%, transparent 75%)',
+          }}
+        />
+
+        <div className="relative w-full max-w-sm">
 
           <div className="mb-9">
             <h1 className="text-[32px] font-semibold tracking-tight text-zinc-950 mb-2">
