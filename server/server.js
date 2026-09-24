@@ -4,6 +4,7 @@ import cors from "cors";
 import cookieParser from "cookie-parser";
 import { connectToDatabase } from "./config/db.js";
 import authRouter from "./routes/authRoutes.js";
+import projectRouter from "./routes/projectsRoutes.js";
 
 const app = express();
 
@@ -24,6 +25,7 @@ app.get("/", (req, res) => {
 });
 
 app.use('/api/auth', authRouter)
+app.use("api/projects", projectRouter)
 
 // Centralized Error Handler
 app.use((err, _req, res, _next) => {
@@ -40,4 +42,4 @@ app.listen(port, () => {
     console.log(`Server is running at http://localhost:${port}`);
 });
 
-connectToDatabase();
+await connectToDatabase();
