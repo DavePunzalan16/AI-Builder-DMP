@@ -1,7 +1,8 @@
-import { createContext, useState, useContext, useEffect, useCallback } from "react";
+import React, { createContext, useState, useContext, useEffect, useCallback } from "react";
 import api from "../api/api";
 import toast from "react-hot-toast";
 import { useNavigate } from "react-router-dom";
+import debounce from "lodash.debounce";
 
 
 const AppContext = createContext(undefined);
@@ -15,10 +16,10 @@ export function AppContextProvider({ children }) {
 
     // States
     const [projects, setProjects] = useState([]);
-    const [loadingProjects, setLoadingProjects] = useState([true]);
-    const [activeProject, setActiveProject] = useState([null]);
-    const [loadingActiveProject, setLoadingActiveProject] = useState([true]);
-    const [chatLoading, setChatLoading] = useState([false]);
+    const [loadingProjects, setLoadingProjects] = useState(true);
+    const [activeProject, setActiveProject] = useState(null);
+    const [loadingActiveProject, setLoadingActiveProject] = useState(true);
+    const [chatLoading, setChatLoading] = useState(false);
     const [generatingProject, setGeneratingProject] = useState(false);
     const [activeFile, setActiveFile] = useState("/App.js");
     const [showCode, setShowCode] = useState(false);
@@ -124,7 +125,7 @@ export function AppContextProvider({ children }) {
             }
     }
 
-    // Automatically poll active project status if generating or pending sya
+    // Automatically poll active project status if generating or pending
     useEffect(()=>{
         if (!activeProject?._id || !user) return;
 
@@ -143,7 +144,7 @@ export function AppContextProvider({ children }) {
     },[activeProject?._id, activeProject?.status, loadProject, user])
 
     const handleGenerate = useCallback(
-        async (params) => {
+        async (prompt) => {
             if(!user) return;
 
             setGeneratingProject(true);
@@ -176,6 +177,67 @@ export function AppContextProvider({ children }) {
         },[user]
     )
 
+    const handleChat = useCallback(
+        async (prompt) => {
+            if (!activeProject || !user) return;
+
+            setChatLoading(true);
+
+            try {
+            const { data } = await api.post(
+                `/api/projects/${activeProject._id}/chat`,
+                { prompt }
+            );
+
+            setActiveProject(data);
+
+            if (data.errors && data.errors.length > 0) {
+                toast.error(
+                `${data.errors.length} revision patch(es) failed`
+                );
+            } else {
+                toast.success(
+                `Updated to version ${data.version}`
+                );
+            }
+            } catch (err) {
+            console.error("Revision request failed:", err);
+
+            toast.error(
+                err?.response?.data?.error ||
+                "Revision request failed"
+            );
+            } finally {
+            setChatLoading(false);
+            }
+        },
+        [activeProject, user]
+        );
+
+        const debouncedSave = React.useMemo(
+            ()=>debounce(async (files, id) => {
+                try {
+                    await api.put('/api/projects/' + id + '/files', { files });
+                } catch (err) {
+                    console.error("Failed to auto-save files:", err);
+                    toast.error("Failed to save code modifications");
+                }
+            }, 1000),[],
+        )
+
+        useEffect(()=>{
+            return ()=>{
+                debouncedSave.cancel();
+            }
+        },[debouncedSave])
+
+        const updateProjectFiles = useCallback(
+            async (files) => {
+                if(!activeProject || !user) return;
+                debouncedSave(files, activeProject._id)
+            },[activeProject, user, debouncedSave]
+        )
+
     return (
         <AppContext.Provider value={{ 
             user, 
@@ -195,7 +257,10 @@ export function AppContextProvider({ children }) {
             loadProjects,
             loadProject,
             handleGenerate,
-            handleDelete
+            handleDelete,
+            handleChat,
+            logout,
+            updateProjectFiles
         }}>
             {children}
         </AppContext.Provider>

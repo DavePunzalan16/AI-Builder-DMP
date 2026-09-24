@@ -7,7 +7,8 @@ const PromptInput = ({
   placeholder = "Describe the website you wanted to build...",
   large = false,
   autoFocus = false,
-  variant = "default"
+  variant = "default",
+  darkMode = false
 }) => {
 
   const [value, setValue] = useState("");
@@ -37,7 +38,7 @@ const PromptInput = ({
   if (variant === "glass") {
     return (
       <form onSubmit={handleSubmit} className='max-w-2xl w-full mx-auto bg-white/10 backdrop-blur-xl rounded-xl ring-1
-  ring-white/25 focus-within:ring-2 focus-within:ring-white/30 overflow-hidden mt-6 transition'>
+        ring-white/25 focus-within:ring-2 focus-within:ring-white/30 overflow-hidden mt-6 transition'>
 
         <textarea ref={textareaRef} value={value} onChange={(e) => setValue(e.target.value)} onKeyDown={handleKeyDown} placeholder={placeholder} disabled={loading}
           rows={3} className='w-full p-4 pb-2 resize-none placeholder:text-white/60 outline-none bg-transparent text-white text-base' />
@@ -64,8 +65,11 @@ const PromptInput = ({
   }
 
   return (
-    <div className={`bg-white border border-zinc-200 rounded-xl flex items-end gap-2 
-    focus-within:ring-1 focus-within:ring-zinc-300 transition ${large ? "p-4" : "p-3"}`}>
+    <div className={`flex items-end gap-2 rounded-xl transition-all duration-300 ${large ? "p-4" : "p-3"} ${
+      darkMode
+        ? "bg-linear-to-br from-emerald-950/40 via-black/30 to-emerald-900/20 backdrop-blur-xl border border-white/10 focus-within:border-white/20 focus-within:ring-1 focus-within:ring-white/20"
+        : "bg-white border border-zinc-200 focus-within:ring-1 focus-within:ring-zinc-300"
+    }`}>
 
       <textarea ref={textareaRef}
         value={value}
@@ -74,13 +78,19 @@ const PromptInput = ({
         placeholder={placeholder}
         disabled={loading}
         rows={large ? 5 : 1}
-        className={`flex-1 bg-transparent border-none outline-none resize-none text-zinc-900 placeholder:text-zinc-400 ${large ? "text-base" : "text-sm"}`} />
+        className={`flex-1 bg-transparent border-none outline-none resize-none ${large ? "text-base" : "text-sm"} ${
+          darkMode ? "text-white placeholder:text-white/40" : "text-zinc-900 placeholder:text-zinc-400"
+        }`} />
 
       <button
         type="button"
         onClick={() => handleSubmit()}
         disabled={!value.trim() || loading}
-        className='inline-flex items-center justify-center bg-zinc-950 text-white hover:bg-zinc-800 disabled:opacity-40 cursor-pointer rounded-full shrink-0'
+        className={`inline-flex items-center justify-center disabled:opacity-40 cursor-pointer rounded-full shrink-0 transition-colors ${
+          darkMode
+            ? "bg-emerald-500/90 text-black hover:bg-emerald-400"
+            : "bg-zinc-950 text-white hover:bg-zinc-800"
+        }`}
         style={{
           width: large ? 36 : 24,
           height: large ? 36 : 24,
