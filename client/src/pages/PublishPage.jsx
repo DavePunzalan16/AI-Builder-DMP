@@ -1,19 +1,21 @@
 import React, { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { SandpackProvider, SandpackPreview } from '@codesandbox/sandpack-react'
 import api from '../api/api'
 import Loading from '../components/Loading'
 import { detectDependencies } from '../utils/sandpackUtils'
 import { AlertTriangleIcon } from 'lucide-react'
+import FullPagePreivew from '../components/FullPagePreivew'
 
 const PublishPage = () => {
   const { id } = useParams()
 
   const [project, setProject] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
+  const [error, setError] = useState("")
 
   useEffect(() => {
+    if(!id) return;
+
     const fetchProject = async () => {
       setLoading(true)
       setError(null)
@@ -45,6 +47,7 @@ const PublishPage = () => {
         </div>
         <h1 className="text-lg font-semibold text-zinc-900 mb-1">Website Unavailable</h1>
         <p className="text-sm text-zinc-500 max-w-sm">{error}</p>
+        <div className='text-[10px] font-semibold uppercase tracking-widest text-zinc-400'>AiBuilder</div>
       </div>
     )
   }
@@ -58,27 +61,7 @@ const PublishPage = () => {
   const dependencies = detectDependencies(project.files)
 
   return (
-    <div className="h-screen w-full">
-      <SandpackProvider
-        template="react"
-        files={sandpackFiles}
-        customSetup={{ dependencies }}
-        options={{
-          externalResources: [
-            'https://cdn.tailwindcss.com',
-            'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css',
-          ],
-          logLevel: 0,
-        }}
-      >
-        <SandpackPreview
-          showNavigator={false}
-          showRefreshButton={false}
-          showOpenInCodeSandbox={false}
-          style={{ height: '100vh', width: '100%', border: 'none' }}
-        />
-      </SandpackProvider>
-    </div>
+    <FullPagePreivew files={project.files}/>
   )
 }
 
