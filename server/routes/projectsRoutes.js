@@ -6,7 +6,7 @@ import { chat } from "../controllers/chatController.js";
 const projectRouter = Router();
 
 //Public route nganii
-projectRouter.get("public/:id", getPublicProject)
+projectRouter.get("/public/:id", getPublicProject)
 //Protect all following routes at all cost muehehe
 projectRouter.use(authMiddleware)
 
