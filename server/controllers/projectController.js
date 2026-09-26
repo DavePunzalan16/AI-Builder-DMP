@@ -1,6 +1,10 @@
 import crypto from "crypto";
 import { Project } from "../models/Project.js";
-import { generateProject } from "../services/ai.js"
+import { generateProject } from "../services/ai.js";
+
+// ========================================
+// HELPERS
+// ========================================
 
 function hashContent(content) {
     return crypto
@@ -10,349 +14,644 @@ function hashContent(content) {
         .slice(0, 12);
 }
 
+// ========================================
 // POST /api/projects
 // Create a new project from an AI prompt.
+// ========================================
+
 export async function createProject(req, res) {
-    const { prompt } = req.body;
+    try {
+        const { prompt } = req.body;
 
-    if (!prompt || typeof prompt !== "string") {
-        res.status(400).json({ error: "prompt is required" });
-        return;
+        if (!prompt || typeof prompt !== "string") {
+            return res.status(400).json({
+                error: "prompt is required",
+            });
+        }
+
+        if (!req.user) {
+            return res.status(401).json({
+                error: "Unauthorized",
+            });
+        }
+
+        // Create project immediately so frontend
+        // can navigate to the project page while AI works.
+        const project = await Project.create({
+            name: "Planning project...",
+            description: prompt,
+
+            files: {},
+
+            messages: [
+                {
+                    role: "user",
+                    content: prompt,
+                    timestamp: new Date(),
+                },
+                {
+                    role: "assistant",
+                    content: "Planning project structure...",
+                    timestamp: new Date(),
+                },
+            ],
+
+            version: 0,
+
+            owner: req.user.userId,
+
+            status: "pending",
+
+            filesPlanned: [],
+            filesGenerated: [],
+            currentFile: null,
+            error: null,
+
+            published: false,
+        });
+
+        // Start AI generation in the background.
+        // This intentionally does not block the HTTP response.
+        runBackgroundGeneration(
+            project._id.toString(),
+            prompt
+        ).catch((error) => {
+            console.error(
+                `[Background AI] Fatal Generation Error For Project ${project._id}:`,
+                error
+            );
+        });
+
+        return res.status(201).json({
+            _id: project._id,
+            name: project.name,
+            description: project.description,
+            files: {},
+            messages: project.messages,
+            version: project.version,
+            status: project.status,
+            filesPlanned: project.filesPlanned,
+            filesGenerated: project.filesGenerated,
+            currentFile: project.currentFile,
+            error: project.error,
+            createdAt: project.createdAt,
+        });
+    } catch (error) {
+        console.error("[Create Project Error]", error);
+
+        return res.status(500).json({
+            error: error.message || "Failed to create project",
+        });
     }
-
-    if (!req.user) {
-        res.status(401).json({ error: "Unauthorized" });
-        return;
-    }
-
-    const project = await Project.create({
-        name: "Planning project...",
-        description: prompt,
-        files: {},
-        messages: [
-            { role: "user", content: prompt },
-            {
-                role: "assistant",
-                content: "Planning project structure..."
-            },
-        ],
-        version: 0,
-        owner: req.user.userId,
-        status: "pending",
-        filesPlanned: [],
-        filesGenerated: [],
-        currentFile: null,
-        error: null,
-    });
-
-    // FIX: project, not prokect
-    runBackgroundGeneration(project._id.toString(), prompt).catch((err) => {
-        console.error(
-            `[Background AI] Fatal Generation Error For Project ${project._id}:`,
-            err
-        );
-    });
-
-    res.status(201).json({
-        _id: project._id,
-        name: project.name,
-        description: project.description,
-        files: {},
-        messages: project.messages,
-        version: project.version,
-        status: project.status,
-        filesPlanned: project.filesPlanned,
-        filesGenerated: project.filesGenerated,
-        currentFile: project.currentFile,
-        error: project.error,
-        createdAt: project.createdAt,
-    });
 }
 
-// Background worker
-async function runBackgroundGeneration(projectId, prompt) {
-    // TODO: AI generation logic
-    try{
-        console.log(`[Background AI] Starting generation for project ${projectId}`);
-        const result = await generataeProject(prompt, {
-            onPlan: async (plan) =>{
-                 console.log(`[Background AI] Starting generation for project ${projectId}. Planned ${plan.files.length} files.`);
-                 const fileList = plan.files.map((f)=>`-\' ${f.path}\': ${f.description}`).join("\n")
+// ========================================
+// Background AI Generation
+// ========================================
 
-                 await Project.findByIdAndUpdate(projecctId, {
-                    name: pla.projectName || "Generated Project",
-                    status: "generating",
-                    filesPlanned: plan.files,
+async function runBackgroundGeneration(projectId, prompt) {
+    try {
+        console.log(
+            `[Background AI] Starting generation for project ${projectId}`
+        );
+
+        // FIX:
+        // generateProject, not generataeProject
+        const result = await generateProject(prompt, {
+            // --------------------------------
+            // AI PLAN CALLBACK
+            // --------------------------------
+            onPlan: async (plan) => {
+                console.log(
+                    `[Background AI] Planned ${
+                        plan.files.length
+                    } files for project ${projectId}`
+                );
+
+                const fileList = plan.files
+                    .map(
+                        (file) =>
+                            `- ${file.path}: ${file.description}`
+                    )
+                    .join("\n");
+
+                await Project.findByIdAndUpdate(
+                    projectId,
+                    {
+                        name:
+                            plan.projectName ||
+                            plan.projectDescription ||
+                            "Generated Project",
+
+                        status: "generating",
+
+                        filesPlanned: plan.files,
+
+                        $push: {
+                            messages: {
+                                role: "assistant",
+                                content:
+                                    `Planned website structure:\n${fileList}`,
+                                timestamp: new Date(),
+                            },
+                        },
+                    },
+                    { new: true }
+                );
+            },
+
+            // --------------------------------
+            // FILE START CALLBACK
+            // --------------------------------
+            onFileStart: async (path) => {
+                console.log(
+                    `[Background AI] Starting file ${path} for project ${projectId}`
+                );
+
+                await Project.findByIdAndUpdate(
+                    projectId,
+                    {
+                        status: "generating",
+                        currentFile: path,
+                    }
+                );
+            },
+
+            // --------------------------------
+            // FILE COMPLETE CALLBACK
+            // --------------------------------
+            onFileComplete: async (path, code) => {
+                console.log(
+                    `[Background AI] Finished file ${path} for project ${projectId}`
+                );
+
+                const project =
+                    await Project.findById(projectId);
+
+                if (!project) {
+                    console.warn(
+                        `[Background AI] Project ${projectId} no longer exists`
+                    );
+                    return;
+                }
+
+                // Make sure files object exists.
+                project.files = project.files || {};
+
+                // Save generated file.
+                project.files[path] = {
+                    content: code,
+                    hash: hashContent(code),
+                };
+
+                // Avoid duplicate file paths in generated list.
+                const previousGenerated =
+                    project.filesGenerated || [];
+
+                if (!previousGenerated.includes(path)) {
+                    project.filesGenerated = [
+                        ...previousGenerated,
+                        path,
+                    ];
+                }
+
+                project.messages.push({
+                    role: "assistant",
+                    content: `Created file "${path}"`,
+                    timestamp: new Date(),
+                });
+
+                project.currentFile = null;
+
+                // Required because `files` is Mixed in your schema.
+                project.markModified("files");
+
+                await project.save();
+            },
+        });
+
+        console.log(
+            `[Background AI] Successfully generated Project ${projectId}`
+        );
+
+        // --------------------------------
+        // MARK PROJECT COMPLETE
+        // --------------------------------
+
+        const project =
+            await Project.findById(projectId);
+
+        if (!project) {
+            console.warn(
+                `[Background AI] Could not find project ${projectId} after generation`
+            );
+            return;
+        }
+
+        project.status = "completed";
+        project.version = 1;
+        project.currentFile = null;
+        project.error = null;
+
+        if (result?.description) {
+            project.name = result.description;
+        }
+
+        project.messages.push({
+            role: "assistant",
+            content:
+                "Website generation complete! You can view and edit the files.",
+            timestamp: new Date(),
+        });
+
+        await project.save();
+
+        console.log(
+            `[Background AI] Project ${projectId} marked as completed`
+        );
+    } catch (error) {
+        // IMPORTANT:
+        // Use `error`, not `err`.
+        console.error(
+            `[Background AI] Fatal generation error for project ${projectId}:`,
+            error
+        );
+
+        try {
+            await Project.findByIdAndUpdate(
+                projectId,
+                {
+                    status: "failed",
+                    error:
+                        error.message ||
+                        "AI generation failed",
+
+                    currentFile: null,
+
                     $push: {
                         messages: {
                             role: "assistant",
-                            content:`Planned website structure:\n${fileList}`,
+                            content:
+                                `❌ Generation failed: ${
+                                    error.message ||
+                                    "Unknown error"
+                                }`,
                             timestamp: new Date(),
-                        }
-                    }
-                 })
-            },
-            onFileStart: async (path)=>{
-                console.log(`[Background AI] Starting file ${path} for project ${projectId}`);
-                await Project.findByIdAndUpdate(projectId,{
-                    currentFile: path,
-                })
-            },
-             onFileComplete: async (path, code)=>{
-                console.log(`[Background AI] Finished file ${path} for project ${projectId}`);
-                
-                const project = await Project.findById(projectId);
-
-                if(project){
-                    project.files = project.files || {};
-                    project.files[path] = { content: code, hash:
-                    hashContent(code) };
-                    project.filesGenerated = [...(project.
-                    filesGenerated || []), path];
-                    project.messages.push({
-                        role: "assistant",
-                        content: `Created file "${path}"`,
-                        timestamp: new Date(),
-                    });
-                    project.currentFile = null;
-                    project.markModified("files");
-                    await project.save();
+                        },
+                    },
                 }
-            }
-        })
-
-        console.log(`[Background AI] Successfully generated Project ${projectId}`);
-
-        const project = await Project.findById(projectId);
-        if(project){
-            project.status = "completed";
-            project.version = 1;
-            if(result.description){
-                project.name = result.description;
-            }
-            project.messages.push({
-                role: "assistant",
-                content: `Website generation complete! You can view and edit the files.`,
-                timestamp: new Date(),
-            })
-            await project.save();
+            );
+        } catch (dbError) {
+            console.error(
+                `[Background AI] Failed to update failed project ${projectId}:`,
+                dbError
+            );
         }
-    }catch(error){
-        console.error(`[Background AI] Fatal generation error for the project ${projectId}:`, err);
-
-        await Project.findByIdAndUpdate(projectId, {
-            status: "failed",
-            error: err.message,
-            $push: {
-                role: "assistant",
-                content: `❌ Generation failed: ${err.message}`,
-                timestamp: new Date(),
-            }
-        })
     }
 }
 
+// ========================================
 // GET /api/projects
+// List all projects owned by user.
+// ========================================
+
 export async function listProjects(req, res) {
-    if (!req.user) {
-        res.status(401).json({ error: "Unauthorized" });
-        return;
-    }
-
-    const projects = await Project.find(
-        { owner: req.user.userId },
-        {
-            name: 1,
-            description: 1,
-            version: 1,
-            createdAt: 1,
-            updatedAt: 1,
+    try {
+        if (!req.user) {
+            return res.status(401).json({
+                error: "Unauthorized",
+            });
         }
-    ).sort({ updatedAt: -1 });
 
-    res.json(projects);
-}
-
-// GET /api/projects/:id
-export async function getProject(req, res) {
-    if (!req.user) {
-        res.status(401).json({ error: "Unauthorized" });
-        return;
-    }
-
-    const project = await Project.findOne({
-        _id: req.params.id,
-        owner: req.user.userId,
-    });
-
-    if (!project) {
-        res.status(404).json({ error: "Project Not Found" });
-        return;
-    }
-
-    const filesObj = {};
-
-    for (const [path, entry] of Object.entries(project.files)) {
-        filesObj[path] = entry.content;
-    }
-
-    res.json({
-        _id: project._id,
-        name: project.name,
-        description: project.description,
-        files: filesObj,
-        messages: project.messages,
-        version: project.version,
-        status: project.status,
-        filesPlanned: project.filesPlanned,
-        filesGenerated: project.filesGenerated,
-        currentFile: project.currentFile,
-        error: project.error,
-        createdAt: project.createdAt,
-        updatedAt: project.updatedAt,
-    });
-}
-
-// DELETE /api/projects/:id
-export async function deleteProject(req, res) {
-    if (!req.user) {
-        res.status(401).json({ error: "Unauthorized" });
-        return;
-    }
-
-    const result = await Project.findOneAndDelete({
-        _id: req.params.id,
-        owner: req.user.userId,
-    });
-
-    if (!result) {
-        res.status(404).json({ error: "Project not found" });
-        return;
-    }
-
-    res.json({ success: true });
-}
-
-// PUT /api/projects/:id/files
-export async function updateProjectFiles(req, res) {
-    const { files } = req.body;
-
-    if (!files || typeof files !== "object") {
-        res.status(400).json({
-            error: "files object is required",
+        const projects = await Project.find(
+            {
+                owner: req.user.userId,
+            },
+            {
+                name: 1,
+                description: 1,
+                version: 1,
+                status: 1,
+                error: 1,
+                createdAt: 1,
+                updatedAt: 1,
+            }
+        ).sort({
+            updatedAt: -1,
         });
-        return;
+
+        return res.json(projects);
+    } catch (error) {
+        console.error(
+            "[List Projects Error]",
+            error
+        );
+
+        return res.status(500).json({
+            error:
+                error.message ||
+                "Failed to load projects",
+        });
     }
-
-    if (!req.user) {
-        res.status(401).json({ error: "Unauthorized" });
-        return;
-    }
-
-    const project = await Project.findOne({
-        _id: req.params.id,
-        owner: req.user.userId,
-    });
-
-    if (!project) {
-        res.status(404).json({ error: "Project not found" });
-        return;
-    }
-
-    const newFiles = {};
-
-    for (const [path, content] of Object.entries(files)) {
-        if (typeof content === "string") {
-            newFiles[path] = {
-                content,
-                hash: hashContent(content),
-            };
-        }
-    }
-
-    project.files = newFiles;
-
-    await project.save();
-
-    const filesObj = {};
-
-    // FIX: content is not defined here
-    for (const [path, entry] of Object.entries(project.files)) {
-        filesObj[path] = entry.content;
-    }
-
-    res.json({
-        _id: project._id,
-        name: project.name,
-        description: project.description,
-        files: filesObj,
-        messages: project.messages,
-        version: project.version,
-        createdAt: project.createdAt,
-        updatedAt: project.updatedAt,
-    });
 }
 
-// POST /api/projects/:id/publish
-export async function publishProject(req, res) {
-    if (!req.user) {
-        res.status(401).json({ error: "Unauthorized" });
-        return;
-    }
+// ========================================
+// GET /api/projects/:id
+// Get full project details.
+// ========================================
 
-    const project = await Project.findOneAndUpdate(
-        {
+export async function getProject(req, res) {
+    try {
+        if (!req.user) {
+            return res.status(401).json({
+                error: "Unauthorized",
+            });
+        }
+
+        const project = await Project.findOne({
             _id: req.params.id,
             owner: req.user.userId,
-        },
-        {
-            published: true,
-        },
-        {
-            returnDocument: "after",
+        });
+
+        if (!project) {
+            return res.status(404).json({
+                error: "Project Not Found",
+            });
         }
-    );
 
-    if (!project) {
-        res.status(404).json({ error: "Project not found" });
-        return;
+        const filesObj = {};
+
+        for (const [path, entry] of Object.entries(
+            project.files || {}
+        )) {
+            // Support both the expected file object
+            // and accidental raw string values.
+            filesObj[path] =
+                typeof entry === "string"
+                    ? entry
+                    : entry?.content || "";
+        }
+
+        return res.json({
+            _id: project._id,
+            name: project.name,
+            description: project.description,
+            files: filesObj,
+            messages: project.messages,
+            version: project.version,
+            status: project.status,
+            filesPlanned: project.filesPlanned,
+            filesGenerated: project.filesGenerated,
+            currentFile: project.currentFile,
+            error: project.error,
+            createdAt: project.createdAt,
+            updatedAt: project.updatedAt,
+        });
+    } catch (error) {
+        console.error(
+            "[Get Project Error]",
+            error
+        );
+
+        return res.status(500).json({
+            error:
+                error.message ||
+                "Failed to load project",
+        });
     }
-
-    res.json({
-        success: true,
-        published: project.published,
-    });
 }
 
-// GET /api/projects/:id/public
+// ========================================
+// DELETE /api/projects/:id
+// ========================================
+
+export async function deleteProject(req, res) {
+    try {
+        if (!req.user) {
+            return res.status(401).json({
+                error: "Unauthorized",
+            });
+        }
+
+        const result =
+            await Project.findOneAndDelete({
+                _id: req.params.id,
+                owner: req.user.userId,
+            });
+
+        if (!result) {
+            return res.status(404).json({
+                error: "Project not found",
+            });
+        }
+
+        return res.json({
+            success: true,
+        });
+    } catch (error) {
+        console.error(
+            "[Delete Project Error]",
+            error
+        );
+
+        return res.status(500).json({
+            error:
+                error.message ||
+                "Failed to delete project",
+        });
+    }
+}
+
+// ========================================
+// PUT /api/projects/:id/files
+// Update project files.
+// ========================================
+
+export async function updateProjectFiles(req, res) {
+    try {
+        const { files } = req.body;
+
+        if (
+            !files ||
+            typeof files !== "object" ||
+            Array.isArray(files)
+        ) {
+            return res.status(400).json({
+                error: "files object is required",
+            });
+        }
+
+        if (!req.user) {
+            return res.status(401).json({
+                error: "Unauthorized",
+            });
+        }
+
+        const project = await Project.findOne({
+            _id: req.params.id,
+            owner: req.user.userId,
+        });
+
+        if (!project) {
+            return res.status(404).json({
+                error: "Project not found",
+            });
+        }
+
+        const newFiles = {};
+
+        for (const [path, content] of Object.entries(
+            files
+        )) {
+            if (typeof content === "string") {
+                newFiles[path] = {
+                    content,
+                    hash: hashContent(content),
+                };
+            }
+        }
+
+        project.files = newFiles;
+        project.markModified("files");
+
+        await project.save();
+
+        const filesObj = {};
+
+        for (const [path, entry] of Object.entries(
+            project.files || {}
+        )) {
+            filesObj[path] =
+                typeof entry === "string"
+                    ? entry
+                    : entry?.content || "";
+        }
+
+        return res.json({
+            _id: project._id,
+            name: project.name,
+            description: project.description,
+            files: filesObj,
+            messages: project.messages,
+            version: project.version,
+            status: project.status,
+            createdAt: project.createdAt,
+            updatedAt: project.updatedAt,
+        });
+    } catch (error) {
+        console.error(
+            "[Update Project Files Error]",
+            error
+        );
+
+        return res.status(500).json({
+            error:
+                error.message ||
+                "Failed to update project files",
+        });
+    }
+}
+
+// ========================================
+// POST /api/projects/:id/publish
+// ========================================
+
+export async function publishProject(req, res) {
+    try {
+        if (!req.user) {
+            return res.status(401).json({
+                error: "Unauthorized",
+            });
+        }
+
+        const project =
+            await Project.findOneAndUpdate(
+                {
+                    _id: req.params.id,
+                    owner: req.user.userId,
+                },
+                {
+                    published: true,
+                },
+                {
+                    new: true,
+                }
+            );
+
+        if (!project) {
+            return res.status(404).json({
+                error: "Project not found",
+            });
+        }
+
+        return res.json({
+            success: true,
+            published: project.published,
+        });
+    } catch (error) {
+        console.error(
+            "[Publish Project Error]",
+            error
+        );
+
+        return res.status(500).json({
+            error:
+                error.message ||
+                "Failed to publish project",
+        });
+    }
+}
+
+// ========================================
+// GET /api/projects/public/:id
+// Get a publicly published project.
+// ========================================
+
 export async function getPublicProject(req, res) {
-    const project = await Project.findById(req.params.id);
+    try {
+        const project =
+            await Project.findById(req.params.id);
 
-    if (!project) {
-        res.status(404).json({
-            error: "Project not found",
+        if (!project) {
+            return res.status(404).json({
+                error: "Project not found",
+            });
+        }
+
+        if (!project.published) {
+            return res.status(403).json({
+                error: "Project is not Published yet",
+            });
+        }
+
+        const filesObj = {};
+
+        for (const [path, entry] of Object.entries(
+            project.files || {}
+        )) {
+            filesObj[path] =
+                typeof entry === "string"
+                    ? entry
+                    : entry?.content || "";
+        }
+
+        return res.json({
+            _id: project._id,
+            name: project.name,
+            description: project.description,
+            files: filesObj,
+            version: project.version,
         });
-        return;
-    }
+    } catch (error) {
+        console.error(
+            "[Public Project Error]",
+            error
+        );
 
-    if (!project.published) {
-        res.status(403).json({
-            error: "Project is not Published yet",
+        return res.status(500).json({
+            error:
+                error.message ||
+                "Failed to load public project",
         });
-        return;
     }
-
-    const filesObj = {};
-
-    for (const [path, entry] of Object.entries(project.files)) {
-        filesObj[path] = entry.content;
-    }
-
-    res.json({
-        _id: project._id,
-        name: project.name,
-        description: project.description,
-        files: filesObj,
-        version: project.version,
-    });
 }
